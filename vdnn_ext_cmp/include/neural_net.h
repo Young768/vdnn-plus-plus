@@ -1,13 +1,13 @@
 #include <iostream>
-#include <vector>
 #include <string>
+#include <vector>
 
-#include <cudnn.h>
 #include <cublas_v2.h>
+#include <cudnn.h>
 #include <curand.h>
 #include <helper_cuda.h>
-#include "user_iface.h"
 #include "layer_params.h"
+#include "user_iface.h"
 #include "utils.h"
 
 // ---------------------- vDNN start ----------------------
@@ -20,8 +20,8 @@
 // ---------------------- vDNN ext end ------------------------
 
 // ---------------------- vDNN ext cmp start ------------------
-#include <queue>
 #include <list>
+#include <queue>
 #define NUM_COMPRESSION_THREADS 8
 #define COMPRESSION_DISCRETIZATION_FACTOR 8
 #define COMPRESSION_BATCH_SIZE 32
@@ -32,149 +32,155 @@
 #define NEURAL_NET
 
 struct PtrIndex {
-	void *ptr;
-	int index;
+  void *ptr;
+  int index;
 };
 
 struct CompressedData {
-	void ***data;
-	bool **slot_taken;
-	unsigned int *mask;
+  void ***data;
+  bool **slot_taken;
+  unsigned int *mask;
 };
 
 struct CompressionMetadata {
-	long total_compression_batches;
-	long *num_elements, *start_pos;
-	long **slot_size; 
+  long total_compression_batches;
+  long *num_elements, *start_pos;
+  long **slot_size;
 };
 
 struct CompressionThreadArgs {
-	CompressedData *compressed_data;
-	void *original_data;
-	CompressionMetadata *compression_metadata;
-	int thread_num;
-	DataType data_type;
-
+  CompressedData *compressed_data;
+  void *original_data;
+  CompressionMetadata *compression_metadata;
+  int thread_num;
+  DataType data_type;
 };
 
 struct Position2dArray {
-	long slot;
-	long offset;
+  long slot;
+  long offset;
 };
 
 class NeuralNet {
-public:
-	void **layer_input, **dlayer_input, **params;
-	int *layer_input_size;
-	int *y, *pred_y;
-	float *loss;
-	float softmax_eps;
-	void *one_vec;
-	float init_std_dev;
+ public:
+  void **layer_input, **dlayer_input, **params;
+  int *layer_input_size;
+  int *y, *pred_y;
+  float *loss;
+  float softmax_eps;
+  void *one_vec;
+  float init_std_dev;
 
-	std::vector<LayerOp> layer_type;
-	int num_layers;
-	cudnnHandle_t cudnn_handle;
-	cublasHandle_t cublas_handle;
-	curandGenerator_t curand_gen;
+  std::vector<LayerOp> layer_type;
+  int num_layers;
+  cudnnHandle_t cudnn_handle;
+  cublasHandle_t cublas_handle;
+  curandGenerator_t curand_gen;
 
-	cudnnDataType_t data_type;
-	size_t data_type_size;
-	cudnnTensorFormat_t tensor_format;
-	int batch_size;
+  cudnnDataType_t data_type;
+  size_t data_type_size;
+  cudnnTensorFormat_t tensor_format;
+  int batch_size;
 
-	size_t free_bytes, total_bytes;
-	size_t workspace_size;
-	void *workspace;
+  size_t free_bytes, total_bytes;
+  size_t workspace_size;
+  void *workspace;
 
-	int input_channels, input_h, input_w;
-	int num_classes;
+  int input_channels, input_h, input_w;
+  int num_classes;
 
-	float *h_loss;
-	int *h_pred_y;
-	
-	// vDNN
-	vDNNType vdnn_type;
-	vDNNConvAlgo vdnn_conv_algo;
-	cudaStream_t stream_compute, stream_memory;
+  float *h_loss;
+  int *h_pred_y;
 
-	bool pre_alloc_conv_derivative, pre_alloc_fc_derivative, pre_alloc_batch_norm_derivative;
+  // vDNN
+  vDNNType vdnn_type;
+  vDNNConvAlgo vdnn_conv_algo;
+  cudaStream_t stream_compute, stream_memory;
 
-	void **h_layer_input;
-	bool *to_offload, *prefetched;
+  bool pre_alloc_conv_derivative, pre_alloc_fc_derivative,
+      pre_alloc_batch_norm_derivative;
 
-	// ---------------------- vDNN ext start ------------------------
-	cudaEvent_t *event_offload_done;
+  void **h_layer_input;
+  bool *to_offload, *prefetched;
 
-	pthread_mutex_t lock_cnmem_memory;
-	pthread_cond_t cond_cnmem_available;
+  // ---------------------- vDNN ext start ------------------------
+  cudaEvent_t *event_offload_done;
 
-	// pass as argument to thread function
-	PtrIndex *layer_num;
+  pthread_mutex_t lock_cnmem_memory;
+  pthread_cond_t cond_cnmem_available;
 
-	void lockedcnmemMalloc(void **p, size_t size, cudaStream_t stream);
-	void lockedcnmemFree(void *p, cudaStream_t stream);
+  // pass as argument to thread function
+  PtrIndex *layer_num;
 
-	cudaEvent_t *event_prefetch_done;
-	pthread_t *thread_flag_prefetch_done;
+  void lockedcnmemMalloc(void **p, size_t size, cudaStream_t stream);
+  void lockedcnmemFree(void *p, cudaStream_t stream);
 
-	sem_t *sem_prefetch_done;
+  cudaEvent_t *event_prefetch_done;
+  pthread_t *thread_flag_prefetch_done;
 
-	static void *threadFlagPrefetchDoneHelper(void *arg);
-	void threadFlagPrefetchDone(int index);
-	CompressedData *compressed_data;
+  sem_t *sem_prefetch_done;
 
-	CompressionThreadArgs **compression_thread_args;
+  static void *threadFlagPrefetchDoneHelper(void *arg);
+  void threadFlagPrefetchDone(int index);
+  CompressedData *compressed_data;
 
-	// ---------------------- vDNN ext end ------------------------
+  CompressionThreadArgs **compression_thread_args;
 
-	// ---------------------- vDNN ext cmp start ------------------
+  // ---------------------- vDNN ext end ------------------------
 
-	bool *to_compress;
-	
-	pthread_t *thread_offload_handler;
-	sem_t *sem_offload_done;
+  // ---------------------- vDNN ext cmp start ------------------
 
-	static void *threadOffloadHandlerHelper(void *arg);
-	void threadOffloadHandler(int layer_num);
+  bool *to_compress;
 
+  pthread_t *thread_offload_handler;
+  sem_t *sem_offload_done;
 
-	cudaEvent_t *event_fwd_compute_done;
-	bool fwd_compute_done;
-	
-	pthread_t thread_compression_scheduler;
-	static void *threadCompressionScheduler(void *arg);
-	sem_t *sem_compress_done;
+  static void *threadOffloadHandlerHelper(void *arg);
+  void threadOffloadHandler(int layer_num);
 
-	std::queue<int, std::list<int> > compression_queue;
-	pthread_mutex_t lock_compression_queue;
-	pthread_cond_t cond_compression_job_available;
+  cudaEvent_t *event_fwd_compute_done;
+  bool fwd_compute_done;
 
-	CompressedData *compressed_data;
-	CompressionMetadata *compression_metadata;
+  pthread_t thread_compression_scheduler;
+  static void *threadCompressionScheduler(void *arg);
+  sem_t *sem_compress_done;
 
-	// ---------------------- vDNN ext cmp end --------------------
+  std::queue<int, std::list<int> > compression_queue;
+  pthread_mutex_t lock_compression_queue;
+  pthread_cond_t cond_compression_job_available;
 
-	enum OffloadType {OFFLOAD_ALL, OFFLOAD_NONE, OFFLOAD_CONV};
+  CompressedData *compressed_data;
+  CompressionMetadata *compression_metadata;
 
-	NeuralNet(std::vector<LayerSpecifier> &layers, DataType data_type, int batch_size, TensorFormat tensor_format, 
-				long long dropout_seed, float softmax_eps, float init_std_dev, vDNNType vdnn_type, vDNNConvAlgo vdnn_conv_algo, 
-				UpdateRule update_rule);
+  // ---------------------- vDNN ext cmp end --------------------
 
-	void getLoss(void *X, int *y, double learning_rate, std::vector<float> &fwd_vdnn_lag, std::vector<float> &bwd_vdnn_lag, bool train = true, int *correct_count = NULL, float *loss = NULL);
-	void getLoss(void *X, int *y, double learning_rate, bool train = true, int *correct_count = NULL, float *loss = NULL);
+  enum OffloadType { OFFLOAD_ALL, OFFLOAD_NONE, OFFLOAD_CONV };
 
-	void compareOutputCorrect(int *correct_count, int *y);
+  NeuralNet(std::vector<LayerSpecifier> &layers, DataType data_type,
+            int batch_size, TensorFormat tensor_format, long long dropout_seed,
+            float softmax_eps, float init_std_dev, vDNNType vdnn_type,
+            vDNNConvAlgo vdnn_conv_algo, UpdateRule update_rule);
 
-	float computeLoss();
+  void getLoss(void *X, int *y, double learning_rate,
+               std::vector<float> &fwd_vdnn_lag,
+               std::vector<float> &bwd_vdnn_lag, bool train = true,
+               int *correct_count = NULL, float *loss = NULL);
+  void getLoss(void *X, int *y, double learning_rate, bool train = true,
+               int *correct_count = NULL, float *loss = NULL);
 
-	int findPrefetchLayer(int cur_layer);
+  void compareOutputCorrect(int *correct_count, int *y);
 
-	bool simulateNeuralNetworkMemory(vDNNConvAlgoPref algo_pref, bool hard, size_t &exp_max_consume, size_t &max_consume);
-	bool simulateCNMEMMemory(size_t &max_consume);
-	void vDNNOptimize(size_t &exp_max_consume, size_t &max_consume);
-	void setOffload(OffloadType offload_type);
-	void resetPrefetched();
+  float computeLoss();
+
+  int findPrefetchLayer(int cur_layer);
+
+  bool simulateNeuralNetworkMemory(vDNNConvAlgoPref algo_pref, bool hard,
+                                   size_t &exp_max_consume,
+                                   size_t &max_consume);
+  bool simulateCNMEMMemory(size_t &max_consume);
+  void vDNNOptimize(size_t &exp_max_consume, size_t &max_consume);
+  void setOffload(OffloadType offload_type);
+  void resetPrefetched();
 };
 
 #endif
